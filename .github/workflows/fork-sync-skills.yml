@@ -180,8 +180,7 @@ jobs:
                 'git push',
                 '```',
               ].join('\n'),
-              labels: ['upstream-sync'],
-              assignees: ['copilot']
+              labels: ['upstream-sync']
             });
 
       - name: Open issue for failed skill merges
@@ -211,6 +210,5 @@ jobs:
               repo: context.repo.repo,
               title: `Merge-forward failed for ${failed.length} skill branch(es)`,
               body,
-              labels: ['skill-maintenance'],
-              assignees: ['copilot']
+              labels: ['skill-maintenance']
             });
