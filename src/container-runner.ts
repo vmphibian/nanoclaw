@@ -10,23 +10,22 @@ import {
   CONTAINER_IMAGE,
   CONTAINER_MAX_OUTPUT_SIZE,
   CONTAINER_TIMEOUT,
-  CREDENTIAL_PROXY_PORT,
   DATA_DIR,
   GROUPS_DIR,
   IDLE_TIMEOUT,
+  ONECLI_API_KEY,
+  ONECLI_URL,
   TIMEZONE,
 } from './config.js';
 import { resolveGroupFolderPath, resolveGroupIpcPath } from './group-folder.js';
 import { logger } from './logger.js';
 import {
-  CONTAINER_HOST_GATEWAY,
   CONTAINER_RUNTIME_BIN,
   hostGatewayArgs,
   readonlyMountArgs,
   stopContainer,
 } from './container-runtime.js';
 import { OneCLI } from '@onecli-sh/sdk';
-import { readEnvFile } from './env.js';
 import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
 
@@ -241,30 +240,6 @@ function buildContainerArgs(
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
 
-  // Route API traffic through the credential proxy (containers never see real secrets)
-  args.push(
-    '-e',
-    `ANTHROPIC_BASE_URL=http://${CONTAINER_HOST_GATEWAY}:${CREDENTIAL_PROXY_PORT}`,
-  );
-
-  // Mirror the host's auth method with a placeholder value.
-  // API key mode: SDK sends x-api-key, proxy replaces with real key.
-  // OAuth mode:   SDK exchanges placeholder token for temp API key,
-  //               proxy injects real OAuth token on that exchange request.
-  const authMode = detectAuthMode();
-  if (authMode === 'api-key') {
-    args.push('-e', 'ANTHROPIC_API_KEY=placeholder');
-  } else {
-    args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
-  }
-
-  // Forward GitHub token if configured (gh CLI reads GH_TOKEN automatically)
-  const { GITHUB_TOKEN } = readEnvFile(['GITHUB_TOKEN']);
-  const githubToken = GITHUB_TOKEN || process.env.GITHUB_TOKEN;
-  if (githubToken) {
-    args.push('-e', `GH_TOKEN=${githubToken}`);
-  }
-
   // Runtime-specific args for host gateway resolution
   args.push(...hostGatewayArgs());
 
@@ -306,6 +281,20 @@ export async function runContainerAgent(
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
   const containerName = `nanoclaw-${safeName}-${Date.now()}`;
   const containerArgs = buildContainerArgs(mounts, containerName);
+
+  // Apply OneCLI gateway config: routes API calls through credential vault.
+  // Pop image name, push OneCLI -e/-v args, then re-add image name at end.
+  const imageName = containerArgs.pop()!;
+  const onecli = new OneCLI({ url: ONECLI_URL, apiKey: ONECLI_API_KEY });
+  const applied = await onecli.applyContainerConfig(containerArgs, {
+    agent: group.folder,
+  });
+  containerArgs.push(imageName);
+  if (applied) {
+    logger.debug({ group: group.name }, 'OneCLI gateway config applied');
+  } else {
+    logger.warn({ group: group.name }, 'OneCLI gateway not reachable, containers may lack credentials');
+  }
 
   logger.debug(
     {

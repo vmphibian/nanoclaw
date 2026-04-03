@@ -8,11 +8,12 @@ import {
   GROUPS_DIR,
   IDLE_TIMEOUT,
   MAX_MESSAGES_PER_PROMPT,
+  ONECLI_API_KEY,
   ONECLI_URL,
   POLL_INTERVAL,
   TIMEZONE,
 } from './config.js';
-import { startCredentialProxy } from './credential-proxy.js';
+import { OneCLI } from '@onecli-sh/sdk';
 import './channels/index.js';
 import {
   getChannelFactory,
@@ -27,7 +28,6 @@ import {
 import {
   cleanupOrphans,
   ensureContainerRuntimeRunning,
-  PROXY_BIND_HOST,
 } from './container-runtime.js';
 import {
   getAllChats,
@@ -164,12 +164,32 @@ function registerGroup(jid: string, group: RegisteredGroup): void {
   }
 
   // Ensure a corresponding OneCLI agent exists (best-effort, non-blocking)
-  ensureOneCLIAgent(jid, group);
+  ensureOneCLIAgent(jid, group).catch(() => {});
 
   logger.info(
     { jid, name: group.name, folder: group.folder },
     'Group registered',
   );
+}
+
+function ensureOneCLIAgent(jid: string, group: RegisteredGroup): Promise<void> {
+  const onecli = new OneCLI({ url: ONECLI_URL, apiKey: ONECLI_API_KEY });
+  const identifier = group.folder
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+  return onecli
+    .ensureAgent({ name: group.name, identifier })
+    .then(() => {
+      logger.debug({ jid, folder: group.folder }, 'OneCLI agent ensured');
+    })
+    .catch((err) => {
+      logger.warn(
+        { jid, folder: group.folder, err },
+        'Failed to ensure OneCLI agent (non-fatal)',
+      );
+    });
 }
 
 /**
@@ -628,16 +648,9 @@ async function main(): Promise<void> {
   loadState();
   restoreRemoteControl();
 
-  // Start credential proxy (containers route API calls through this)
-  const proxyServer = await startCredentialProxy(
-    CREDENTIAL_PROXY_PORT,
-    PROXY_BIND_HOST,
-  );
-
   // Graceful shutdown handlers
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutdown signal received');
-    proxyServer.close();
     await queue.shutdown(10000);
     for (const ch of channels) await ch.disconnect();
     process.exit(0);
