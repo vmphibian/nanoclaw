@@ -293,7 +293,10 @@ export async function runContainerAgent(
   if (applied) {
     logger.debug({ group: group.name }, 'OneCLI gateway config applied');
   } else {
-    logger.warn({ group: group.name }, 'OneCLI gateway not reachable, containers may lack credentials');
+    logger.warn(
+      { group: group.name },
+      'OneCLI gateway not reachable, containers may lack credentials',
+    );
   }
 
   logger.debug(

@@ -5,7 +5,24 @@
       "Bash(cd:*)",
       "Bash(git fetch:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m ':*)"
+      "Bash(git commit -m ':*)",
+      "Bash(bash setup.sh)",
+      "Bash(npx tsx:*)",
+      "Bash(docker info:*)",
+      "Bash(docker run:*)",
+      "Bash(onecli version:*)",
+      "Bash(onecli secrets:*)",
+      "Bash(onecli --help)",
+      "Read(//c/Users/mattg/.local/bin/**)",
+      "Read(//c/Users/mattg/.local/bin//**)",
+      "Bash(curl -fsSL onecli.sh/install)",
+      "Bash(curl -s http://127.0.0.1:10254/api/health)",
+      "Read(//c/Users/mattg/.local/share/**)",
+      "Read(//c/Users/mattg/AppData/Local/**)",
+      "Read(//c/Users/mattg/**)",
+      "Bash(mkdir -p data/env)",
+      "Bash(cp .env data/env/env)",
+      "Bash(npm run:*)"
     ]
   }
 }
