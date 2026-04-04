@@ -286,9 +286,19 @@ export async function runContainerAgent(
   // Pop image name, push OneCLI -e/-v args, then re-add image name at end.
   const imageName = containerArgs.pop()!;
   const onecli = new OneCLI({ url: ONECLI_URL, apiKey: ONECLI_API_KEY });
-  const applied = await onecli.applyContainerConfig(containerArgs, {
+  let applied = await onecli.applyContainerConfig(containerArgs, {
     agent: group.folder,
   });
+  if (!applied) {
+    // Fallback to default OneCLI config when no agent-specific profile exists.
+    applied = await onecli.applyContainerConfig(containerArgs);
+    if (applied) {
+      logger.warn(
+        { group: group.name, agent: group.folder },
+        'OneCLI agent profile not found; using default gateway config',
+      );
+    }
+  }
   containerArgs.push(imageName);
   if (applied) {
     logger.debug({ group: group.name }, 'OneCLI gateway config applied');
